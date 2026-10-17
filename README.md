@@ -1,0 +1,157 @@
+# OTARM — OT Asset & Risk Manager
+
+A frontend implementation of the approved [`_docs/plan.md`](./_docs/plan.md) baseline. It provides an interactive OT inventory, risk dashboard, risk register, remediation workflow, exports, and audit view using clearly fictional demo data.
+
+## Repository layout
+
+```text
+backend/     FastAPI application, SQLAlchemy persistence, authentication, and tests
+_docs/       Product requirements and interface design guidance
+frontend/    Vite/React application, browser mock service, and frontend tests
+AGENTS.md    Repository instructions for coding agents
+openapi.yaml Versioned frontend/backend API agreement
+```
+
+## Run locally
+
+With GNU Make installed, the shortest path is:
+
+```bash
+make install
+make dev DEMO_PASSWORD="choose-a-local-demo-password"
+```
+
+This starts the frontend on port `5173` and the backend on port `8000`. Sign in as `admin@otarm.demo` (or another seeded `@otarm.demo` user) with the password passed to `make dev`. Run `make help` for individual service, test, type-check, and build targets.
+
+Without Make:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open the Vite URL shown in the terminal.
+
+## Run with Docker Compose
+
+Docker Compose is the recommended way to run the complete application. It starts
+PostgreSQL and builds the application image, including the React frontend and
+FastAPI backend.
+
+From the repository root, set the required values in PowerShell:
+
+```powershell
+$env:POSTGRES_PASSWORD = "choose-a-database-password"
+$env:OTARM_DEMO_PASSWORD = "choose-a-demo-password"
+$env:OTARM_TOKEN_SECRET = "choose-a-long-random-token-secret"
+```
+
+Use strong, unique values outside local development. Keep these variables set in
+the same PowerShell session used for subsequent Compose commands. If you open a
+new PowerShell session, set them again before running any `docker compose`
+command, including the stop commands below.
+
+Build and start both services in the background:
+
+```powershell
+docker compose up --build -d
+```
+
+Compose waits for PostgreSQL to become healthy before starting the application.
+Check service status or follow application logs with:
+
+```powershell
+docker compose ps
+docker compose logs -f app
+```
+
+Open `http://localhost:8000` and sign in as `admin@otarm.demo` using the value
+set in `OTARM_DEMO_PASSWORD`. If port `8000` is already occupied, set another
+host port before starting the services:
+
+```powershell
+$env:OTARM_PORT = "18000"
+docker compose up --build -d
+```
+
+The application will then be available at `http://localhost:18000`.
+
+### Stop the application
+
+Stop and remove the application and database containers and their network:
+
+```powershell
+docker compose down
+```
+
+This preserves the `postgres-data` named volume. Running `docker compose up -d`
+later starts the application again with the existing database contents.
+
+To stop the containers without removing them, use:
+
+```powershell
+docker compose stop
+```
+
+Resume those stopped containers with:
+
+```powershell
+docker compose start
+```
+
+To remove the containers **and permanently delete all PostgreSQL data**, use:
+
+```powershell
+docker compose down -v
+```
+
+Do not use `-v` when the database contains information you need to retain.
+
+## Quality checks
+
+```bash
+cd frontend
+npm run typecheck
+npm test
+npm run build
+```
+
+The regular backend suite excludes Docker integration tests. To build an
+isolated Compose project, test it against a temporary PostgreSQL volume, and
+remove the test stack afterward, run:
+
+```powershell
+cd backend
+uv run python -m pytest -m integration
+```
+
+Docker Desktop must be running. The integration suite chooses a free host port
+and generates its own test credentials, so it does not use or remove the normal
+development stack or its `postgres-data` volume. With GNU Make, the equivalent
+command is `make test-integration` from the repository root.
+
+## Architecture
+
+All UI data access is routed through `frontend/src/services/otarmService.ts`. The app binds that contract to `HttpOtarmService`, which authenticates against and calls the FastAPI implementation of `openapi.yaml`. During local development, Vite proxies `/api/v1` to `http://127.0.0.1:8000`; deployments can set `VITE_OTARM_API_BASE_URL` at build time. Bearer sessions are held in browser session storage and cleared on expiry or an unauthorized response. UI components never call `fetch` or access persistence directly.
+
+`MockOtarmService` remains available for isolated frontend testing and backend-free development. It implements:
+
+- Site-scoped dashboard metrics and deterministic priority sorting.
+- Search and filters for assets and findings.
+- Asset creation with duplicate-tag validation and audit events.
+- Remediation state updates.
+- Organization-style scoped CSV export with formula-injection neutralization.
+- Detached return values to prevent callers mutating service state.
+
+The risk domain module implements the plan's OTARM-5X5 v1 arithmetic and boundary policy. Tests cover scoring boundaries, prioritization, CSV safety, service filtering, isolation, dashboard counts, exports, and the application shell.
+
+The FastAPI backend under `backend/` implements the root `openapi.yaml` contract with SQLAlchemy, PostgreSQL or SQLite persistence, PBKDF2 password hashes, expiring bearer tokens, organization-scoped data access, role checks, remediation transition validation, and API contract tests. Configure the database with `OTARM_DATABASE_URL`; see `backend/README.md` for setup and runtime details.
+
+## Safety boundary
+
+This implementation never probes, scans, polls, writes to, configures, or patches OT equipment. Stored IP addresses are display-only. Lifecycle and support states are treated as human-provided evidence, never inferred from model names.
+
+## Demo limitations
+
+This remains a development MVP: SQLite and PostgreSQL provide development persistence, while production identity, managed PostgreSQL operations, versioned migrations, backups, concurrent deployment controls, imports, and externally immutable audit retention remain future work.

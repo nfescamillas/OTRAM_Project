@@ -1,0 +1,25 @@
+[project]
+name = "otarm-backend"
+version = "0.1.0"
+description = "FastAPI backend for the OT Asset & Risk Manager"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "psycopg[binary]>=3.2,<4",
+    "sqlalchemy>=2.0,<3",
+    "uvicorn[standard]>=0.34,<1",
+]
+
+[dependency-groups]
+dev = ["httpx>=0.28,<1", "pytest>=8.3,<9", "pyyaml>=6,<7"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -m 'not integration'"
+markers = [
+    "integration: builds and exercises the isolated Docker Compose application stack",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"

@@ -70,7 +70,7 @@ def _available_port() -> int:
         return int(listener.getsockname()[1])
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def compose_stack() -> Iterator[ComposeStack]:
     if shutil.which("docker") is None:
         pytest.fail("Docker is required for Compose integration tests.")
@@ -79,6 +79,21 @@ def compose_stack() -> Iterator[ComposeStack]:
     )
     if daemon.returncode != 0:
         pytest.fail(f"Docker is not available. Start Docker Desktop first.\n{daemon.stderr}")
+
+    external_base_url = os.getenv("OTARM_TEST_BASE_URL")
+    if external_base_url:
+        demo_password = os.environ.get("OTARM_DEMO_PASSWORD")
+        if not demo_password:
+            pytest.fail("OTARM_DEMO_PASSWORD is required with OTARM_TEST_BASE_URL.")
+        stack = ComposeStack(
+            base_url=external_base_url.rstrip("/"),
+            demo_password=demo_password,
+            environment=os.environ.copy(),
+            project_name=os.getenv("COMPOSE_PROJECT_NAME", "otarm-integration"),
+        )
+        stack.wait_until_ready()
+        yield stack
+        return
 
     port = _available_port()
     environment = os.environ.copy()
@@ -135,9 +150,41 @@ def test_authentication_and_protected_routes(compose_stack: ComposeStack) -> Non
     assert len(authenticated.json()) == 8
 
 
+def test_seeded_dashboard_and_remediation_separation_of_duties(
+    compose_stack: ComposeStack,
+) -> None:
+    assessor = compose_stack.login("assessor")
+    approver = compose_stack.login("approver")
+    dashboard = httpx.get(
+        f"{compose_stack.base_url}/api/v1/dashboard/summary", headers=assessor, timeout=10
+    )
+    assessor_verification = httpx.patch(
+        f"{compose_stack.base_url}/api/v1/actions/r1/status",
+        json={"status": "VERIFIED"},
+        headers=assessor,
+        timeout=10,
+    )
+    approver_verification = httpx.patch(
+        f"{compose_stack.base_url}/api/v1/actions/r1/status",
+        json={"status": "VERIFIED"},
+        headers=approver,
+        timeout=10,
+    )
+
+    assert dashboard.status_code == 200
+    assert dashboard.json()["activeAssets"] == 8
+    assert dashboard.json()["severityCounts"] == {
+        "LOW": 0, "MEDIUM": 0, "HIGH": 3, "CRITICAL": 1,
+    }
+    assert assessor_verification.status_code == 403
+    assert approver_verification.status_code == 200
+    assert approver_verification.json()["status"] == "VERIFIED"
+
+
 def test_postgres_write_authorization_audit_and_restart_persistence(
     compose_stack: ComposeStack,
 ) -> None:
+    """Keep the state-changing persistence scenario last in this module."""
     payload = {
         "tag": "IT-PLC-001",
         "name": "Integration Test PLC",
@@ -189,34 +236,3 @@ def test_postgres_write_authorization_audit_and_restart_persistence(
         event["action"] == "ASSET_CREATED" and event["entity"] == payload["tag"]
         for event in audit.json()
     )
-
-
-def test_seeded_dashboard_and_remediation_separation_of_duties(
-    compose_stack: ComposeStack,
-) -> None:
-    assessor = compose_stack.login("assessor")
-    approver = compose_stack.login("approver")
-    dashboard = httpx.get(
-        f"{compose_stack.base_url}/api/v1/dashboard/summary", headers=assessor, timeout=10
-    )
-    assessor_verification = httpx.patch(
-        f"{compose_stack.base_url}/api/v1/actions/r1/status",
-        json={"status": "VERIFIED"},
-        headers=assessor,
-        timeout=10,
-    )
-    approver_verification = httpx.patch(
-        f"{compose_stack.base_url}/api/v1/actions/r1/status",
-        json={"status": "VERIFIED"},
-        headers=approver,
-        timeout=10,
-    )
-
-    assert dashboard.status_code == 200
-    assert dashboard.json()["activeAssets"] == 8
-    assert dashboard.json()["severityCounts"] == {
-        "LOW": 0, "MEDIUM": 0, "HIGH": 3, "CRITICAL": 1,
-    }
-    assert assessor_verification.status_code == 403
-    assert approver_verification.status_code == 200
-    assert approver_verification.json()["status"] == "VERIFIED"

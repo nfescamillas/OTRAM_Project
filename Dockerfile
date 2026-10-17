@@ -11,7 +11,7 @@ ENV VITE_OTARM_API_BASE_URL=${VITE_OTARM_API_BASE_URL}
 RUN npm run build
 
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.10 /uv /uvx /bin/
 

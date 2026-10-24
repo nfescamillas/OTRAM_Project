@@ -1,5 +1,6 @@
 .git
 .gitignore
+.env.production
 .venv
 **/.venv
 **/__pycache__

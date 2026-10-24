@@ -21,8 +21,11 @@ def test_backend_serves_built_frontend(tmp_path) -> None:
     with TestClient(app) as client:
         index_response = client.get("/")
         asset_response = client.get("/assets/app.js")
+        health_response = client.get("/healthz")
 
     assert index_response.status_code == 200
     assert "OTARM" in index_response.text
     assert asset_response.status_code == 200
     assert asset_response.text == "console.log('otarm')"
+    assert health_response.status_code == 200
+    assert health_response.json() == {"status": "ok"}

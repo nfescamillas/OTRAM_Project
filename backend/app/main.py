@@ -74,6 +74,10 @@ def create_app(*, store: DatabaseStore | None = None, token_service: TokenServic
                    findings.router, remediation.router, audit.router):
         app.include_router(router, prefix=api_prefix)
 
+    @app.get("/healthz", include_in_schema=False)
+    async def health_check() -> dict[str, str]:
+        return {"status": "ok"}
+
     frontend_dir = Path(static_dir or os.getenv(
         "OTARM_STATIC_DIR", Path(__file__).resolve().parent.parent / "static"
     ))

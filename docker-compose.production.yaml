@@ -1,0 +1,52 @@
+name: otarm-production
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: otarm_production
+      POSTGRES_USER: otarm_production
+      POSTGRES_PASSWORD: ${OTARM_PROD_POSTGRES_PASSWORD:?OTARM_PROD_POSTGRES_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U otarm_production -d otarm_production"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - production-postgres-data:/var/lib/postgresql/data
+    networks:
+      - production-internal
+    security_opt:
+      - no-new-privileges:true
+
+  app:
+    image: ${OTARM_IMAGE:?OTARM_IMAGE must be an immutable sha-* image tag or digest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      OTARM_DATABASE_URL: postgresql+psycopg://otarm_production:${OTARM_PROD_POSTGRES_PASSWORD:?OTARM_PROD_POSTGRES_PASSWORD is required}@db:5432/otarm_production
+      OTARM_DEMO_PASSWORD: ${OTARM_PROD_DEMO_PASSWORD:?OTARM_PROD_DEMO_PASSWORD is required}
+      OTARM_TOKEN_SECRET: ${OTARM_PROD_TOKEN_SECRET:?OTARM_PROD_TOKEN_SECRET is required}
+      OTARM_TOKEN_TTL_SECONDS: ${OTARM_PROD_TOKEN_TTL_SECONDS:-3600}
+      OTARM_CORS_ORIGINS: ${OTARM_PROD_CORS_ORIGINS:-}
+    ports:
+      - "${OTARM_PROD_PORT:-8080}:8000"
+    networks:
+      - production-internal
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  production-internal:
+    internal: true
+
+volumes:
+  production-postgres-data:
+

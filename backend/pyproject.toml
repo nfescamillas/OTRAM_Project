@@ -18,6 +18,7 @@ dev = ["httpx>=0.28,<1", "pytest>=8.3,<9", "pyyaml>=6,<7"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q -m 'not integration'"
 markers = [
     "integration: builds and exercises the isolated Docker Compose application stack",

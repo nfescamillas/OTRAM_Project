@@ -11,6 +11,7 @@ backend/     FastAPI application, SQLAlchemy persistence, authentication, and te
 _docs/       Product requirements and interface design guidance
 frontend/    Vite/React application, browser mock service, and frontend tests
 observability/ Standalone OpenTelemetry, Prometheus, Loki, Tempo, and Grafana stack
+on-call-engineer/ Read-only alert polling and headless Codex triage worker
 AGENTS.md    Repository instructions for coding agents
 openapi.yaml Versioned frontend/backend API agreement
 ```

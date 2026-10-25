@@ -57,3 +57,15 @@ def test_production_promotion_is_manual_and_does_not_rebuild() -> None:
     assert "^sha-[0-9a-f]{40}$" in serialized_steps
 
 
+def test_ci_prepares_and_cleans_up_external_observability_network() -> None:
+    workflow = _workflow("ci.yml")
+    compose_steps = workflow["jobs"]["compose-tests"]["steps"]
+    serialized_steps = yaml.safe_dump(compose_steps)
+
+    create = serialized_steps.index("docker network create otarm-observability-internal")
+    start = serialized_steps.index("docker compose up --build --detach")
+    cleanup = serialized_steps.index("docker network rm otarm-observability-internal")
+
+    assert create < start < cleanup
+
+

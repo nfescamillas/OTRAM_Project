@@ -122,6 +122,9 @@ jobs:
           echo "OTARM_DEMO_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
           echo "OTARM_TOKEN_SECRET=$(openssl rand -hex 48)" >> "$GITHUB_ENV"
 
+      - name: Create shared observability network
+        run: docker network create otarm-observability-internal
+
       - name: Build and start Docker Compose stack
         run: docker compose up --build --detach
 
@@ -152,7 +155,9 @@ jobs:
 
       - name: Stop Docker Compose stack
         if: always()
-        run: docker compose down --volumes --remove-orphans
+        run: |
+          docker compose down --volumes --remove-orphans
+          docker network rm otarm-observability-internal 2>/dev/null || true
 
   publish:
     name: Publish container

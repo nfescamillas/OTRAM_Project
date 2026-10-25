@@ -17,6 +17,7 @@ from .models import (
     RemediationAction, Role, Severity, SeverityCounts, Site, UserRecord, VerificationState,
 )
 from .seed import seed_database
+from .telemetry import ApplicationMetrics
 
 
 class StoreError(Exception):
@@ -34,6 +35,7 @@ class DatabaseStore:
                  password_iterations: int = 310_000, engine: Engine | None = None,
                  sync_demo_password: bool = False) -> None:
         self.engine = engine or create_database_engine(database_url)
+        self.metrics: ApplicationMetrics | None = None
         self._sessions = create_session_factory(self.engine)
         Base.metadata.create_all(self.engine)
         with self._sessions() as session:
@@ -149,6 +151,8 @@ class DatabaseStore:
                 session.flush()
             except IntegrityError as exc:
                 raise StoreError(409, "CONFLICT", "Asset tag already exists.") from exc
+            if data.assessed and self.metrics is not None:
+                self.metrics.risk_assessments.add(1, {"status": "completed"})
             return self._asset(row)
 
     def list_findings(self, user: UserRecord, *, site_id: str | None = None,
@@ -247,8 +251,9 @@ class DatabaseStore:
             writer.writerow([f"'{value}" if str(value).startswith(("=", "+", "-", "@")) else value for value in row])
         return output.getvalue()
 
-    @staticmethod
-    def _append_audit(session, user: UserRecord, action: str, entity: str) -> None:
+    def _append_audit(self, session, user: UserRecord, action: str, entity: str) -> None:
         session.add(AuditEventEntity(id=f"e-{uuid4()}", organization_id=user.organizationId,
                                      actor=user.displayName, action=action, entity=entity,
                                      occurred_at=datetime.now(timezone.utc), result=AuditResult.SUCCESS.value))
+        if self.metrics is not None:
+            self.metrics.audit_events.add(1, {"event.type": action, "result": "success"})

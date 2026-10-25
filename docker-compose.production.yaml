@@ -33,10 +33,14 @@ services:
       OTARM_TOKEN_SECRET: ${OTARM_PROD_TOKEN_SECRET:?OTARM_PROD_TOKEN_SECRET is required}
       OTARM_TOKEN_TTL_SECONDS: ${OTARM_PROD_TOKEN_TTL_SECONDS:-3600}
       OTARM_CORS_ORIGINS: ${OTARM_PROD_CORS_ORIGINS:-}
+      OTARM_ENVIRONMENT: ${OTARM_PROD_ENVIRONMENT:-production}
+      OTARM_VERSION: ${OTARM_PROD_VERSION:?OTARM_PROD_VERSION is required}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTARM_PROD_OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     ports:
       - "${OTARM_PROD_PORT:-8080}:8000"
     networks:
       - production-internal
+      - observability
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -46,6 +50,9 @@ services:
 networks:
   production-internal:
     internal: true
+  observability:
+    name: otarm-observability-internal
+    external: true
 
 volumes:
   production-postgres-data:

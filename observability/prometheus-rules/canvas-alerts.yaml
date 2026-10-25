@@ -1,0 +1,20 @@
+groups:
+  - name: canvas-component-creation
+    rules:
+      - alert: CanvasComponentCreationRepeatedFailures
+        expr: |
+          sum by (service_name, deployment_environment_name, service_version) (
+            increase(canvas_component_creation_failures_total[10m])
+          ) >= 5
+        for: 5m
+        labels:
+          severity: warning
+          owner: canvas-platform
+        annotations:
+          summary: "Repeated canvas component-creation failures in {{ $labels.deployment_environment_name }}"
+          description: "{{ $labels.service_name }} version {{ $labels.service_version }} has recorded at least 5 canvas component-creation failures in 10 minutes, sustained for 5 minutes. Users may be unable to add components to their canvases."
+          service: "{{ $labels.service_name }}"
+          environment: "{{ $labels.deployment_environment_name }}"
+          deployed_version: "{{ $labels.service_version }}"
+          dashboard_url: "http://localhost:3000/d/otarm-backend-metrics?var-environment={{ $labels.deployment_environment_name }}&var-deployed_version={{ $labels.service_version }}"
+          action: "Check the dashboard for a version-correlated increase, inspect component-creation request traces and errors, and roll back the deployed version if failures began with the release."

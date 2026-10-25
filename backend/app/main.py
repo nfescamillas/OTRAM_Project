@@ -12,9 +12,10 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .auth import TokenService
-from .database import default_database_url
+from .database import default_database_url, instrument_database
 from .routers import assets, audit, auth, dashboard, findings, remediation, sites
 from .store import DatabaseStore, StoreError
+from .telemetry import instrument_app
 
 
 def _error(request: Request, status_code: int, code: str, message: str,
@@ -37,6 +38,9 @@ def create_app(*, store: DatabaseStore | None = None, token_service: TokenServic
     secret = os.getenv("OTARM_TOKEN_SECRET", "").encode() or secrets.token_bytes(48)
     ttl = int(os.getenv("OTARM_TOKEN_TTL_SECONDS", "3600"))
     app.state.token_service = token_service or TokenService(secret, ttl)
+    _, _, metrics = instrument_app(app)
+    app.state.store.metrics = metrics
+    instrument_database(app.state.store.engine, metrics)
 
     origins = [origin.strip() for origin in os.getenv(
         "OTARM_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
@@ -53,6 +57,12 @@ def create_app(*, store: DatabaseStore | None = None, token_service: TokenServic
 
     @app.exception_handler(StoreError)
     async def store_error_handler(request: Request, exc: StoreError):
+        request.app.state.metrics.http_errors.add(1, {
+            "error.code": exc.code,
+            "http.route": str(getattr(request.scope.get("route"), "path", "unmatched")),
+        })
+        if exc.status_code == 403:
+            request.app.state.metrics.authorization_denials.add(1, {"reason": "domain_policy"})
         return _error(request, exc.status_code, exc.code, exc.message)
 
     @app.exception_handler(HTTPException)
@@ -62,11 +72,19 @@ def create_app(*, store: DatabaseStore | None = None, token_service: TokenServic
             message = str(exc.detail.get("message", "Request failed."))
         else:
             code, message = "INTERNAL", str(exc.detail)
+        request.app.state.metrics.http_errors.add(1, {
+            "error.code": code,
+            "http.route": str(getattr(request.scope.get("route"), "path", "unmatched")),
+        })
         return _error(request, exc.status_code, code, message, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
         fields = {".".join(str(item) for item in error["loc"][1:]): error["msg"] for error in exc.errors()}
+        request.app.state.metrics.http_errors.add(1, {
+            "error.code": "VALIDATION",
+            "http.route": str(getattr(request.scope.get("route"), "path", "unmatched")),
+        })
         return _error(request, 400, "VALIDATION", "One or more request values are invalid.", fields)
 
     api_prefix = "/api/v1"
@@ -76,7 +94,10 @@ def create_app(*, store: DatabaseStore | None = None, token_service: TokenServic
 
     @app.get("/healthz", include_in_schema=False)
     async def health_check() -> dict[str, str]:
-        return {"status": "ok"}
+        return {
+            "status": "ok",
+            "revision": os.getenv("RENDER_GIT_COMMIT", "local"),
+        }
 
     frontend_dir = Path(static_dir or os.getenv(
         "OTARM_STATIC_DIR", Path(__file__).resolve().parent.parent / "static"

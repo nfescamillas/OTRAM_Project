@@ -5,7 +5,7 @@ from app.main import create_app
 from app.store import DatabaseStore
 
 
-def test_backend_serves_built_frontend(tmp_path) -> None:
+def test_backend_serves_built_frontend(tmp_path, monkeypatch) -> None:
     static_dir = tmp_path / "static"
     assets_dir = static_dir / "assets"
     assets_dir.mkdir(parents=True)
@@ -22,10 +22,16 @@ def test_backend_serves_built_frontend(tmp_path) -> None:
         index_response = client.get("/")
         asset_response = client.get("/assets/app.js")
         health_response = client.get("/healthz")
+        monkeypatch.setenv("RENDER_GIT_COMMIT", "0123456789abcdef")
+        render_health_response = client.get("/healthz")
 
     assert index_response.status_code == 200
     assert "OTARM" in index_response.text
     assert asset_response.status_code == 200
     assert asset_response.text == "console.log('otarm')"
     assert health_response.status_code == 200
-    assert health_response.json() == {"status": "ok"}
+    assert health_response.json() == {"status": "ok", "revision": "local"}
+    assert render_health_response.json() == {
+        "status": "ok",
+        "revision": "0123456789abcdef",
+    }

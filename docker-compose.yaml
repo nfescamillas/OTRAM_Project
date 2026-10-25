@@ -22,8 +22,20 @@ services:
       OTARM_DATABASE_URL: postgresql+psycopg://otarm:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/otarm
       OTARM_DEMO_PASSWORD: ${OTARM_DEMO_PASSWORD:?OTARM_DEMO_PASSWORD is required}
       OTARM_TOKEN_SECRET: ${OTARM_TOKEN_SECRET:?OTARM_TOKEN_SECRET is required}
+      OTEL_SERVICE_NAME: otarm-backend
+      OTARM_ENVIRONMENT: development
+      OTARM_VERSION: ${OTARM_VERSION:-development}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     ports:
       - "${OTARM_PORT:-8000}:8000"
+    networks:
+      - default
+      - observability
+
+networks:
+  observability:
+    name: otarm-observability-internal
+    external: true
 
 volumes:
   postgres-data:

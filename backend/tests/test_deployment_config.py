@@ -51,7 +51,7 @@ def test_production_promotion_is_manual_and_does_not_rebuild() -> None:
     assert list(workflow["on"]) == ["workflow_dispatch"]
     assert workflow["permissions"] == {"contents": "read", "packages": "write"}
     assert workflow["concurrency"]["cancel-in-progress"] == "false"
-    assert promotion["environment"] == "production"
+    assert promotion["environment"]["name"] == "render-production"
     assert "docker buildx imagetools create" in serialized_steps
     assert "build-push-action" not in serialized_steps
     assert "^sha-[0-9a-f]{40}$" in serialized_steps

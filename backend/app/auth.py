@@ -82,8 +82,12 @@ def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials
 
 
 def require_roles(*allowed: Role) -> Callable[..., UserRecord]:
-    def dependency(user: UserRecord = Depends(get_current_user)) -> UserRecord:
+    def dependency(request: Request, user: UserRecord = Depends(get_current_user)) -> UserRecord:
         if user.role not in allowed:
+            request.app.state.metrics.authorization_denials.add(1, {
+                "reason": "role",
+                "role": user.role.value,
+            })
             raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You are not authorized to perform this operation."})
         return user
     return dependency

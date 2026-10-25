@@ -58,6 +58,41 @@ Seeded fictional users are `assessor@otarm.demo`, `approver@otarm.demo`, `viewer
 
 Obtain a bearer token from `POST /api/v1/auth/token`, then pass it as `Authorization: Bearer <token>`. Tokens expire after 60 minutes by default. Configure `OTARM_TOKEN_TTL_SECONDS` or supply `OTARM_TOKEN_SECRET` for a stable development signing secret. Production deployments must use a secret manager and durable identity provider.
 
+## OpenTelemetry
+
+Every HTTP request is traced with OpenTelemetry. Spans carry `service.name`,
+`deployment.environment.name`, and `service.version` resource attributes. Configure
+them with `OTEL_SERVICE_NAME` (default `otarm-backend`), `OTARM_ENVIRONMENT`
+(default `development`), and `OTARM_VERSION` (default package version; on Render,
+`RENDER_GIT_COMMIT` is used when present).
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` (or the trace-specific
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`) to send traces to an OTLP/HTTP collector.
+Standard OpenTelemetry exporter variables such as `OTEL_EXPORTER_OTLP_HEADERS`
+are also supported. When no endpoint is set, requests remain instrumented but no
+exporter is installed, so local development does not attempt an external connection.
+
+When the general endpoint or `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` is set, the
+backend also exports these low-cardinality application metrics:
+
+- `otarm_http_server_requests_total`
+- `otarm_http_server_request_duration_seconds`
+- `otarm_http_server_active_requests`
+- `otarm_http_server_errors_total`
+- `otarm_db_operation_duration_seconds`
+- `otarm_db_operation_errors_total`
+- `otarm_auth_attempts_total`
+- `otarm_authorization_denials_total`
+- `otarm_audit_events_total`
+- `otarm_risk_assessments_total`
+
+Metrics carry the same `service.name`, `deployment.environment.name`, and
+`service.version` resource attributes as traces. HTTP labels use route templates,
+database labels contain only the backend and operation, and no asset identifiers,
+user identifiers, email addresses, stored IP addresses, or SQL statements are
+recorded. `OTEL_METRIC_EXPORT_INTERVAL` controls the export interval in
+milliseconds and defaults to `60000`.
+
 ## Tests
 
 ```powershell

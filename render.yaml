@@ -7,7 +7,8 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /healthz
-    autoDeployTrigger: checksPass
+    # GitHub Actions triggers the exact tested commit through Render's deploy hook.
+    autoDeployTrigger: "off"
     envVars:
       - key: OTARM_DATABASE_URL
         fromDatabase:
@@ -19,6 +20,12 @@ services:
         generateValue: true
       - key: OTARM_TOKEN_TTL_SECONDS
         value: "3600"
+      - key: OTARM_ENVIRONMENT
+        value: production
+      - key: OTEL_SERVICE_NAME
+        value: otarm-backend
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
 
 databases:
   - name: otarm-db
